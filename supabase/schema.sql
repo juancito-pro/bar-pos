@@ -302,21 +302,27 @@ drop policy if exists "profiles_admin_update" on public.profiles;
 create policy "profiles_admin_update" on public.profiles for update to authenticated
   using (public.my_role() = 'admin') with check (public.my_role() = 'admin');
 
--- CATÁLOGO (categorías, productos, mesas): todos leen, admin escribe
+-- CATÁLOGO (categorías, productos, mesas): todos leen, clientes anónimos leen carta/menú QR, admin escribe
 drop policy if exists "categories_read" on public.categories;
 create policy "categories_read" on public.categories for select to authenticated using (public.my_role() is not null);
+drop policy if exists "categories_anon_read" on public.categories;
+create policy "categories_anon_read" on public.categories for select to anon using (true);
 drop policy if exists "categories_admin" on public.categories;
 create policy "categories_admin" on public.categories for all to authenticated
   using (public.my_role() = 'admin') with check (public.my_role() = 'admin');
 
 drop policy if exists "products_read" on public.products;
 create policy "products_read" on public.products for select to authenticated using (public.my_role() is not null);
+drop policy if exists "products_anon_read" on public.products;
+create policy "products_anon_read" on public.products for select to anon using (active = true);
 drop policy if exists "products_admin" on public.products;
 create policy "products_admin" on public.products for all to authenticated
   using (public.my_role() = 'admin') with check (public.my_role() = 'admin');
 
 drop policy if exists "tables_read" on public.bar_tables;
 create policy "tables_read" on public.bar_tables for select to authenticated using (public.my_role() is not null);
+drop policy if exists "tables_anon_read" on public.bar_tables;
+create policy "tables_anon_read" on public.bar_tables for select to anon using (active = true);
 drop policy if exists "tables_admin" on public.bar_tables;
 create policy "tables_admin" on public.bar_tables for all to authenticated
   using (public.my_role() = 'admin') with check (public.my_role() = 'admin');

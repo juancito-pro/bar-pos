@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Wallet, Lock, Unlock, Banknote, CreditCard, QrCode, Receipt, Scale, History } from 'lucide-react'
+import { Wallet, Lock, Unlock, Banknote, CreditCard, QrCode, Receipt, Scale, History, Mail } from 'lucide-react'
 import { supabase, errMsg } from '../../lib/supabase'
 import { money, fmtDateTime, fmtTime } from '../../lib/format'
 import { useAuth } from '../../context/AuthContext'
@@ -8,6 +8,7 @@ import { useCashSession } from '../../hooks/useCashSession'
 import { useRealtime } from '../../hooks/useRealtime'
 import { Loader, Stat, StatusBadge } from '../../components/ui'
 import Modal from '../../components/Modal'
+import DailyReportModal from '../../components/DailyReportModal'
 
 export default function Caja() {
   const { profile } = useAuth()
@@ -21,6 +22,7 @@ export default function Caja() {
   const [notes, setNotes] = useState('')
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [showDailyReport, setShowDailyReport] = useState(false)
 
   const loadData = useCallback(async () => {
     const h = await supabase.from('cash_sessions').select('*').eq('cashier_id', profile.id).eq('status', 'cerrada')
@@ -167,7 +169,26 @@ export default function Caja() {
       )}
 
       {result && (
-        <Modal title="Caja cerrada" onClose={() => setResult(null)} footer={<button className="btn btn-primary" onClick={() => setResult(null)}>Aceptar</button>}>
+        <Modal
+          title="Caja cerrada con éxito"
+          onClose={() => setResult(null)}
+          footer={
+            <>
+              <button className="btn" onClick={() => setResult(null)}>
+                Cerrar
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setResult(null)
+                  setShowDailyReport(true)
+                }}
+              >
+                <Mail size={16} /> Mandar Reporte por Correo
+              </button>
+            </>
+          }
+        >
           <div className="col">
             <div className="row-between"><span className="muted">Total ventas</span><span className="money">{money(result.total_sales)}</span></div>
             <div className="row-between"><span className="muted">Efectivo esperado</span><span className="money">{money(result.expected_cash)}</span></div>
@@ -176,6 +197,10 @@ export default function Caja() {
               <span className={`money ${Number(result.difference) < 0 ? 'tone-danger' : 'tone-success'}`}>{money(result.difference)}</span></div>
           </div>
         </Modal>
+      )}
+
+      {showDailyReport && (
+        <DailyReportModal onClose={() => setShowDailyReport(false)} />
       )}
     </>
   )

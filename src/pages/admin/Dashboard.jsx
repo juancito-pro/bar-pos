@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, BarChart, Bar } from 'recharts'
-import { TrendingUp, Receipt, LayoutGrid, AlertTriangle, Wallet, Trophy } from 'lucide-react'
+import { TrendingUp, Receipt, LayoutGrid, AlertTriangle, Wallet, Trophy, Mail, QrCode, ExternalLink } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { money, isoDay, METHOD_LABEL } from '../../lib/format'
 import { useRealtime } from '../../hooks/useRealtime'
 import { Loader, Stat } from '../../components/ui'
 import { CHART_COLORS, tooltipStyle } from '../../lib/chart'
+import QrMenuModal from '../../components/QrMenuModal'
+import DailyReportModal from '../../components/DailyReportModal'
 
 export default function Dashboard() {
   const [data, setData] = useState(null)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
 
   const load = useCallback(async () => {
     const since = new Date()
@@ -67,6 +71,25 @@ export default function Dashboard() {
 
   return (
     <>
+      {/* Barra de Acciones Rápidas */}
+      <div className="card mb row wrap" style={{ padding: '12px 16px', background: 'var(--surface-2)' }}>
+        <div className="row">
+          <span className="bold small">Acciones Rápidas:</span>
+        </div>
+        <div className="grow" />
+        <div className="row wrap" style={{ gap: 8 }}>
+          <button className="btn btn-sm btn-primary" onClick={() => setShowReportModal(true)}>
+            <Mail size={15} /> Mandar Reporte del Día por Correo
+          </button>
+          <button className="btn btn-sm" onClick={() => setShowQrModal(true)}>
+            <QrCode size={15} /> Menú Digital QR
+          </button>
+          <a href="/menu" target="_blank" rel="noopener noreferrer" className="btn btn-sm">
+            <ExternalLink size={15} /> Ver Menú en Vivo
+          </a>
+        </div>
+      </div>
+
       <div className="grid grid-4 keep-2 mb stagger">
         <Stat icon={Wallet} label="Ventas de hoy" value={money(data.todayTotal)} tone="primary" hint={`${data.todayOrders} cobros`} />
         <Stat icon={Receipt} label="Ticket promedio" value={money(data.todayOrders ? data.todayTotal / data.todayOrders : 0)} tone="accent" />
@@ -164,6 +187,14 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {showReportModal && (
+        <DailyReportModal onClose={() => setShowReportModal(false)} />
+      )}
+
+      {showQrModal && (
+        <QrMenuModal onClose={() => setShowQrModal(false)} />
+      )}
     </>
   )
 }

@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, BarChart3, Package, Boxes, Users, Wallet, Receipt, Beer,
-  ChefHat, LayoutGrid, ClipboardList, LogOut,
+  ChefHat, LayoutGrid, ClipboardList, LogOut, QrCode, Mail
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { useRealtime } from '../hooks/useRealtime'
 import { ROLE_LABEL, initials } from '../lib/format'
+import QrMenuModal from './QrMenuModal'
+import DailyReportModal from './DailyReportModal'
 
 const ITEMS = {
   dashboard: { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -71,6 +73,9 @@ export default function Layout() {
   const { profile, signOut } = useAuth()
   const { pathname } = useLocation()
   const counts = useNavCounts(profile)
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+
   const groups = NAV[profile.role] || []
   const flat = groups.flatMap((g) => g.items.map((k) => ITEMS[k]))
 
@@ -128,9 +133,27 @@ export default function Layout() {
               {new Date().toLocaleDateString('es-BO', { weekday: 'long', day: 'numeric', month: 'long' })}
             </div>
           </div>
-          <span className="badge live listo">
-            <span className="dot" /> En línea
-          </span>
+          <div className="row" style={{ gap: 10 }}>
+            <button
+              className="btn btn-sm"
+              onClick={() => setShowQrModal(true)}
+              title="Ver o imprimir código QR para clientes"
+            >
+              <QrCode size={15} /> Menú QR
+            </button>
+            {profile.role === 'admin' && (
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => setShowReportModal(true)}
+                title="Mandar informe general del día al correo"
+              >
+                <Mail size={15} /> Mandar Reporte
+              </button>
+            )}
+            <span className="badge live listo">
+              <span className="dot" /> En línea
+            </span>
+          </div>
         </header>
 
         <header className="mobile-header">
@@ -143,9 +166,29 @@ export default function Layout() {
               <div className="xs muted">{profile.full_name || profile.username} · {ROLE_LABEL[profile.role]}</div>
             </div>
           </div>
-          <button className="icon-btn" onClick={signOut} aria-label="Cerrar sesión" id="logout-mobile">
-            <LogOut size={17} />
-          </button>
+          <div className="row" style={{ gap: 6 }}>
+            <button
+              className="icon-btn"
+              onClick={() => setShowQrModal(true)}
+              aria-label="Menú QR"
+              title="Menú QR"
+            >
+              <QrCode size={17} />
+            </button>
+            {profile.role === 'admin' && (
+              <button
+                className="icon-btn"
+                onClick={() => setShowReportModal(true)}
+                aria-label="Reporte del día"
+                title="Reporte del día"
+              >
+                <Mail size={17} />
+              </button>
+            )}
+            <button className="icon-btn" onClick={signOut} aria-label="Cerrar sesión" id="logout-mobile">
+              <LogOut size={17} />
+            </button>
+          </div>
         </header>
 
         <main className="content" key={pathname}>
@@ -165,6 +208,15 @@ export default function Layout() {
           )
         })}
       </nav>
+
+      {/* Modales globales de Menú QR y Reporte Diario */}
+      {showQrModal && (
+        <QrMenuModal onClose={() => setShowQrModal(false)} />
+      )}
+
+      {showReportModal && (
+        <DailyReportModal onClose={() => setShowReportModal(false)} />
+      )}
     </div>
   )
 }

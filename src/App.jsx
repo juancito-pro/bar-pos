@@ -22,6 +22,8 @@ import Reportes from './pages/admin/Reportes'
 import Productos from './pages/admin/Productos'
 import Inventario from './pages/admin/Inventario'
 import Usuarios from './pages/admin/Usuarios'
+// Menú Digital Público (QR)
+import MenuPublico from './pages/public/MenuPublico'
 
 const HOME_BY_ROLE = {
   admin: '/admin',
@@ -59,6 +61,10 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Menú Digital Público para clientes vía código QR (no requiere login) */}
+      <Route path="/menu" element={<MenuPublico />} />
+      <Route path="/menu/:mesa" element={<MenuPublico />} />
+
       <Route path="/login" element={<Login />} />
 
       {/* Redirección por defecto según rol */}

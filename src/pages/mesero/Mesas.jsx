@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Users, Clock, Plus } from 'lucide-react'
+import { Bell, Users, Clock, Plus, QrCode } from 'lucide-react'
 import { supabase, errMsg } from '../../lib/supabase'
 import { money, timeAgo } from '../../lib/format'
 import { useRealtime } from '../../hooks/useRealtime'
@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../components/Toast'
 import { Loader, Empty } from '../../components/ui'
 import Modal from '../../components/Modal'
+import QrMenuModal from '../../components/QrMenuModal'
 
 const FILTERS = [
   { key: 'all', label: 'Todas' },
@@ -27,6 +28,8 @@ export default function Mesas() {
   const [filter, setFilter] = useState('all')
   const [showAddTable, setShowAddTable] = useState(false)
   const [newTable, setNewTable] = useState({ number: '', name: '', capacity: 4 })
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [qrTable, setQrTable] = useState(null)
   const [busy, setBusy] = useState(false)
   const [, tick] = useState(0)
 
@@ -114,18 +117,29 @@ export default function Mesas() {
             </button>
           ))}
         </div>
-        {profile.role === 'admin' && (
+        <div className="row wrap" style={{ gap: 8 }}>
           <button
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm"
             onClick={() => {
-              const nextNum = (tables.length ? Math.max(...tables.map((t) => t.number)) : 0) + 1
-              setNewTable({ number: nextNum, name: `Mesa ${nextNum}`, capacity: 4 })
-              setShowAddTable(true)
+              setQrTable(null)
+              setShowQrModal(true)
             }}
           >
-            <Plus size={15} /> Nueva Mesa
+            <QrCode size={15} /> QR de Mesas
           </button>
-        )}
+          {profile.role === 'admin' && (
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => {
+                const nextNum = (tables.length ? Math.max(...tables.map((t) => t.number)) : 0) + 1
+                setNewTable({ number: nextNum, name: `Mesa ${nextNum}`, capacity: 4 })
+                setShowAddTable(true)
+              }}
+            >
+              <Plus size={15} /> Nueva Mesa
+            </button>
+          )}
+        </div>
       </div>
 
       {tables.length === 0 ? (
@@ -218,6 +232,16 @@ export default function Mesas() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {showQrModal && (
+        <QrMenuModal
+          defaultTable={qrTable}
+          onClose={() => {
+            setShowQrModal(false)
+            setQrTable(null)
+          }}
+        />
       )}
     </>
   )

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { Calendar, Download, Package, Users, Wallet, TrendingUp, Receipt, Scale } from 'lucide-react'
+import { Calendar, Download, Package, Users, Wallet, TrendingUp, Receipt, Scale, Mail } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { money, isoDay, startOfDay, endOfDay, fmtDate, fmtDateTime, METHOD_LABEL, downloadCSV } from '../../lib/format'
 import { Loader, Stat } from '../../components/ui'
 import { tooltipStyle } from '../../lib/chart'
+import DailyReportModal from '../../components/DailyReportModal'
 
 const PRESETS = [
   { label: 'Hoy', days: 0 },
@@ -17,6 +18,7 @@ export default function Reportes() {
   const [to, setTo] = useState(isoDay())
   const [tab, setTab] = useState('productos')
   const [r, setR] = useState(null)
+  const [showEmailModal, setShowEmailModal] = useState(false)
 
   const preset = (days) => {
     const d = new Date()
@@ -95,8 +97,15 @@ export default function Reportes() {
           {PRESETS.map((p) => <button key={p.label} className="chip" onClick={() => preset(p.days)}>{p.label}</button>)}
         </div>
         <div className="grow" />
+        <button className="btn btn-sm btn-primary" onClick={() => setShowEmailModal(true)} disabled={!r}>
+          <Mail size={15} /> Mandar Reporte por Correo
+        </button>
         <button className="btn btn-sm" onClick={exportCSV} disabled={!r}><Download size={15} /> Exportar CSV</button>
       </div>
+
+      {showEmailModal && (
+        <DailyReportModal targetDate={to} onClose={() => setShowEmailModal(false)} />
+      )}
 
       {!r ? <Loader /> : (
         <>
