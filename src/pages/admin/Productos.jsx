@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Pencil, Search, Package, Check, X, FolderPlus } from 'lucide-react'
+import { Plus, Pencil, Search, Package, Check, X, FolderPlus, QrCode } from 'lucide-react'
 import { supabase, errMsg } from '../../lib/supabase'
 import { money } from '../../lib/format'
 import { useRealtime } from '../../hooks/useRealtime'
 import { useToast } from '../../components/Toast'
 import { Loader, Empty } from '../../components/ui'
 import Modal from '../../components/Modal'
+import QrMenuModal from '../../components/QrMenuModal'
 
 export default function Productos() {
   const toast = useToast()
@@ -16,6 +17,7 @@ export default function Productos() {
   const [q, setQ] = useState('')
   const [editProduct, setEditProduct] = useState(null) // null = cerrado, {} = nuevo, objeto = editar
   const [editCategory, setEditCategory] = useState(null)
+  const [showQrModal, setShowQrModal] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -105,6 +107,9 @@ export default function Productos() {
           <div className="muted small">Administra los productos, precios de venta, costos y categorías del bar.</div>
         </div>
         <div className="row wrap">
+          <button className="btn btn-sm" onClick={() => setShowQrModal(true)}>
+            <QrCode size={16} /> Menú Digital QR
+          </button>
           <button className="btn btn-sm" onClick={() => setEditCategory({})}>
             <FolderPlus size={16} /> Nueva Categoría
           </button>
@@ -407,6 +412,10 @@ export default function Productos() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {showQrModal && (
+        <QrMenuModal onClose={() => setShowQrModal(false)} />
       )}
     </>
   )

@@ -19,11 +19,12 @@ export default function QrMenuModal({ onClose, defaultTable = null }) {
     fetchTables()
   }, [])
 
-  // Calcular URL destino del Menú
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  // Calcular URL destino del Menú (compatible con HashRouter y subcarpetas)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const path = typeof window !== 'undefined' ? window.location.pathname.replace(/\/$/, '') : ''
   const menuUrl = selectedTable === 'all'
-    ? `${baseUrl}/menu`
-    : `${baseUrl}/menu?mesa=${selectedTable}`
+    ? `${origin}${path}/#/menu`
+    : `${origin}${path}/#/menu?mesa=${selectedTable}`
 
   // Generar QR en canvas y DataURL
   useEffect(() => {
