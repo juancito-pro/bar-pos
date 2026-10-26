@@ -61,6 +61,10 @@ export function errMsg(error) {
   if (m.includes('User already registered')) return 'Ese usuario ya existe'
   if (m.includes('Password should be')) return 'La contraseña debe tener al menos 6 caracteres'
   if (m.includes('uq_open_order_per_table')) return 'Esta mesa ya tiene una cuenta abierta'
+  if (m.includes('uq_profiles_email')) return 'Ese Gmail ya está registrado en otro usuario'
+  if (m.includes('profiles_email_format')) return 'El correo no tiene un formato válido (ej. nombre@gmail.com)'
+  if (m.includes("'email' column") || m.includes('column "email"') || m.includes('profiles.email'))
+    return 'Falta actualizar la base de datos: ejecuta supabase/migracion_gmail.sql en el SQL Editor de Supabase.'
   if (m.includes('row-level security')) return 'No tienes permiso para esta acción'
   if (m.includes('Failed to fetch')) return 'Error de conexión con Supabase. Revisa tu URL y conexión a internet.'
   return m

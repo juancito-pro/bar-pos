@@ -181,10 +181,13 @@ export default function QrMenuModal({ onClose, defaultTable = null }) {
 
         {/* Selector de Mesa o Menú General */}
         <div className="field">
-          <label htmlFor="qr-table-select">Asignar a:</label>
+          <label htmlFor="qr-table-select" className="bold" style={{ fontSize: 14 }}>
+            🎯 ¿Para qué mesa deseas generar el QR?
+          </label>
           <select
             id="qr-table-select"
             className="input select"
+            style={{ height: 48, fontSize: 15, fontWeight: 600 }}
             value={selectedTable}
             onChange={(e) => setSelectedTable(e.target.value)}
           >
@@ -202,7 +205,7 @@ export default function QrMenuModal({ onClose, defaultTable = null }) {
           className="card center"
           style={{
             padding: 24,
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))',
+            background: 'var(--surface-2)',
             border: '1px solid var(--border-strong)',
           }}
         >
@@ -210,16 +213,16 @@ export default function QrMenuModal({ onClose, defaultTable = null }) {
             <div
               style={{
                 display: 'inline-block',
-                padding: 14,
+                padding: 16,
                 background: '#ffffff',
-                borderRadius: 18,
-                boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                borderRadius: 20,
+                boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
               }}
             >
               <img
                 src={qrDataUrl}
                 alt="QR Code"
-                style={{ width: 210, height: 210, display: 'block' }}
+                style={{ width: 220, height: 220, display: 'block' }}
               />
             </div>
           ) : (
@@ -227,30 +230,32 @@ export default function QrMenuModal({ onClose, defaultTable = null }) {
           )}
 
           <div className="mt">
-            <span className="badge listo">
-              <Sparkles size={13} /> {selectedTable === 'all' ? 'Menú General' : `Mesa #${selectedTable}`}
+            <span className="badge listo" style={{ fontSize: 14, padding: '6px 14px' }}>
+              <Sparkles size={15} /> {selectedTable === 'all' ? 'Menú General' : `Mesa #${selectedTable}`}
             </span>
           </div>
 
           <div
             className="xs muted truncate mt"
-            style={{ maxWidth: 320, margin: '8px auto 0' }}
+            style={{ maxWidth: 360, margin: '10px auto 0' }}
           >
             {menuUrl}
           </div>
         </div>
 
-        {/* Botones de Acción */}
-        <div className="row wrap" style={{ gap: 8 }}>
-          <button className="btn grow" onClick={handleDownload} disabled={!qrDataUrl}>
-            <Download size={16} /> Descargar PNG
-          </button>
-          <button className="btn grow" onClick={handlePrint} disabled={!qrDataUrl}>
-            <Printer size={16} /> Imprimir Cartelito
-          </button>
-          <button className="btn" onClick={handleCopy} title="Copiar enlace">
-            {copied ? <Check size={16} className="tone-success" /> : <Copy size={16} />}
-            <span>{copied ? '¡Copiado!' : 'Copiar URL'}</span>
+        {/* Botones Grandes de Acción */}
+        <div className="col gap-sm">
+          <div className="row wrap" style={{ gap: 10 }}>
+            <button className="btn btn-primary btn-lg grow" onClick={handleDownload} disabled={!qrDataUrl}>
+              <Download size={18} /> Descargar Imagen QR
+            </button>
+            <button className="btn btn-lg grow" onClick={handlePrint} disabled={!qrDataUrl}>
+              <Printer size={18} /> Imprimir Cartelito
+            </button>
+          </div>
+          <button className="btn btn-block" onClick={handleCopy} title="Copiar enlace directo">
+            {copied ? <Check size={18} className="tone-success" /> : <Copy size={18} />}
+            <span className="bold">{copied ? '¡Enlace copiado al portapapeles!' : 'Copiar Enlace Directo'}</span>
           </button>
         </div>
       </div>

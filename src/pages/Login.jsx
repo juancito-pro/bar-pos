@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { User, Lock, Eye, EyeOff, Crown, Wallet, Smartphone } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import ThemeToggle from '../components/ThemeToggle'
 
 export const HOME = { admin: '/admin', cajero: '/caja', mesero: '/mesas' }
 
@@ -29,7 +30,8 @@ export default function Login() {
   }
 
   return (
-    <div className="login-page">
+    <div className="login-page" style={{ position: 'relative' }}>
+      <ThemeToggle showLabel className="login-theme-btn" />
       <section className="login-hero">
         <div className="hero-orb" style={{ width: 220, height: 220, top: '12%', right: '14%', background: 'radial-gradient(circle at 30% 30%, #ffd27a, #ff5fa2 70%)' }} />
         <div className="hero-orb" style={{ width: 90, height: 90, top: '42%', left: '12%', background: 'radial-gradient(circle at 30% 30%, #b18cff, #5b2fd6)', animationDelay: '-3s' }} />

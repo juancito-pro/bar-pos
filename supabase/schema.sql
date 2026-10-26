@@ -12,10 +12,14 @@ create table if not exists public.profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   username    text unique not null,
   full_name   text not null default '',
+  email       text check (email is null or email ~* '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'), -- Gmail / correo de contacto
   role        text not null default 'mesero' check (role in ('admin','cajero','mesero')),
   active      boolean not null default false,
   created_at  timestamptz not null default now()
 );
+-- Si la tabla ya existía, agrega la columna de correo
+alter table public.profiles add column if not exists email text;
+create unique index if not exists uq_profiles_email on public.profiles (lower(email)) where email is not null;
 
 create table if not exists public.categories (
   id          bigint generated always as identity primary key,
@@ -129,11 +133,12 @@ $$;
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.profiles (id, username, full_name, role, active)
+  insert into public.profiles (id, username, full_name, email, role, active)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)),
     coalesce(new.raw_user_meta_data->>'full_name', ''),
+    nullif(lower(trim(new.raw_user_meta_data->>'email')), ''),
     'mesero',
     false
   );

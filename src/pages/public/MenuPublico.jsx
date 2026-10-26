@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import {
   Search, Wine, Sparkles, Bell, Heart, Check, X,
-  AlertCircle, ChevronRight, Share2
+  AlertCircle, ChevronRight, Share2, Plus, Minus, Smartphone, ShoppingBag
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { money } from '../../lib/format'
+import ThemeToggle from '../../components/ThemeToggle'
 
 export default function MenuPublico() {
   const { mesa: paramMesa } = useParams()
@@ -23,6 +24,7 @@ export default function MenuPublico() {
   const [onlyAvailable, setOnlyAvailable] = useState(true)
   const [wishlist, setWishlist] = useState({}) // { [id]: qty }
   const [showWishlist, setShowWishlist] = useState(false)
+  const [showBillboard, setShowBillboard] = useState(false)
   const [waiterCalled, setWaiterCalled] = useState(false)
 
   // Cargar catálogo de tragos y mesa
@@ -154,6 +156,9 @@ export default function MenuPublico() {
   const wishlistCount = wishlistItems.reduce((acc, item) => acc + item.qty, 0)
 
   const handleCallWaiter = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([120, 60, 120])
+    }
     setWaiterCalled(true)
     setTimeout(() => setWaiterCalled(false), 5000)
   }
@@ -189,6 +194,7 @@ export default function MenuPublico() {
           </div>
 
           <div className="menu-header-actions">
+            <ThemeToggle size="sm" />
             <button className="menu-icon-btn" onClick={handleShare} title="Compartir carta">
               <Share2 size={18} />
             </button>
@@ -198,38 +204,46 @@ export default function MenuPublico() {
           </div>
         </div>
 
-        {/* Banner de Mesa si está presente */}
-        {tableQuery && (
-          <div className="menu-table-banner">
+        {/* Banner de Mesa y Llamado Rápido al Mesero */}
+        <div className="menu-table-banner">
+          <div className="row" style={{ gap: 8 }}>
             <span className="menu-table-badge">
-              📍 {tableInfo ? tableInfo.name : `Mesa #${tableQuery}`}
+              📍 {tableInfo ? tableInfo.name : tableQuery ? `Mesa #${tableQuery}` : 'Barra / Salón General'}
             </span>
-            <span className="menu-table-hint">Pide tus tragos directo a tu mesero</span>
+            <span className="menu-table-hint">Disponibilidad en vivo</span>
           </div>
-        )}
+          <button
+            className={`btn btn-sm ${waiterCalled ? 'btn-success' : 'btn-primary'} menu-quick-waiter-btn`}
+            onClick={handleCallWaiter}
+            title="Avisar al mesero para que se acerque a tu mesa"
+          >
+            <Bell size={15} />
+            <span>{waiterCalled ? '¡Mesero Notificado!' : 'Llamar Mesero'}</span>
+          </button>
+        </div>
       </header>
 
       <main className="menu-main-content">
-        {/* Hero de bienvenida */}
+        {/* Hero de bienvenida con guía intuitiva rápida */}
         <section className="menu-hero">
           <h1>Nuestra Selección de <span className="grad-text">Tragos & Bebidas</span></h1>
-          <p className="muted">Disfruta de coctelería de autor, cervezas artesanales y tragos clásicos preparados al momento.</p>
+          <p className="muted">Carta interactiva: añade tus tragos con el botón <strong>+ Pedir</strong> y muéstraselo al mesero con 1 toque.</p>
         </section>
 
-        {/* Buscador y Filtro Rápido */}
+        {/* Buscador y Filtro Rápido con botones grandes */}
         <section className="menu-search-section">
           <div className="menu-search-bar">
-            <Search size={18} className="menu-search-icon" />
+            <Search size={20} className="menu-search-icon" />
             <input
               type="text"
-              placeholder="Buscar mojito, fernet, gin, cerveza..."
+              placeholder="Buscar mojito, fernet, cerveza, trago..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="menu-search-input"
             />
             {search && (
-              <button className="menu-clear-search" onClick={() => setSearch('')}>
-                <X size={16} />
+              <button className="menu-clear-search" onClick={() => setSearch('')} aria-label="Limpiar búsqueda">
+                <X size={18} />
               </button>
             )}
           </div>
@@ -249,13 +263,13 @@ export default function MenuPublico() {
           </div>
         </section>
 
-        {/* Categorías deslizables */}
+        {/* Categorías deslizables con botones grandes */}
         <nav className="menu-categories-scroll">
           <button
             className={`menu-cat-chip ${selectedCat === 'all' ? 'active' : ''}`}
             onClick={() => setSelectedCat('all')}
           >
-            <Sparkles size={16} />
+            <Sparkles size={18} />
             <span>Todos</span>
           </button>
           {categories.map((c) => (
@@ -273,10 +287,10 @@ export default function MenuPublico() {
         {/* Mensaje de Llamado a Mesero */}
         {waiterCalled && (
           <div className="menu-toast-alert animate-pop">
-            <Check size={20} className="tone-success" />
+            <Check size={22} className="tone-success" />
             <div>
-              <div className="bold">¡Mesero notificado!</div>
-              <div className="xs muted">Enseguida se acercarán a tu mesa para tomar tu orden.</div>
+              <div className="bold">¡Mesero notificado! 🛎️</div>
+              <div className="xs muted">Enseguida se acercarán a {tableInfo ? tableInfo.name : tableQuery ? `tu Mesa #${tableQuery}` : 'tu lugar'} para tomar tu orden.</div>
             </div>
           </div>
         )}
@@ -284,8 +298,8 @@ export default function MenuPublico() {
         {/* Estado de Carga / Error */}
         {loading && (
           <div className="menu-loading">
-            <div className="spinner" style={{ width: 36, height: 36 }} />
-            <p className="muted mt">Preparando la carta...</p>
+            <div className="spinner" style={{ width: 40, height: 40 }} />
+            <p className="muted mt">Cargando la carta de tragos...</p>
           </div>
         )}
 
@@ -323,14 +337,14 @@ export default function MenuPublico() {
 
             <div className="menu-drinks-grid">
               {group.items.map((prod) => {
-                const inWishlist = Boolean(wishlist[prod.id])
+                const qty = wishlist[prod.id] || 0
                 const isOutOfStock = prod.track_stock && prod.stock <= 0
                 const isLowStock = prod.track_stock && prod.stock > 0 && prod.stock <= prod.min_stock
 
                 return (
                   <article
                     key={prod.id}
-                    className={`menu-drink-card ${isOutOfStock ? 'out-of-stock' : ''}`}
+                    className={`menu-drink-card ${isOutOfStock ? 'out-of-stock' : ''} ${qty > 0 ? 'selected' : ''}`}
                   >
                     <div className="menu-drink-top">
                       <span className="menu-drink-icon">
@@ -355,15 +369,41 @@ export default function MenuPublico() {
                         {money(prod.price)}
                       </div>
 
-                      <button
-                        className={`menu-wish-btn ${inWishlist ? 'active' : ''}`}
-                        onClick={() => toggleWishlist(prod)}
-                        disabled={isOutOfStock}
-                        title={inWishlist ? 'Quitar de mi lista' : 'Agregar a mi selección'}
-                      >
-                        <Heart size={16} fill={inWishlist ? 'currentColor' : 'none'} />
-                        <span>{inWishlist ? 'En mi lista' : 'Quiero este'}</span>
-                      </button>
+                      {qty === 0 ? (
+                        <button
+                          type="button"
+                          className="menu-btn-add"
+                          onClick={() => updateWishlistQty(prod.id, 1)}
+                          disabled={isOutOfStock}
+                          title={`Pedir ${prod.name}`}
+                        >
+                          <Plus size={18} />
+                          <span>Pedir</span>
+                        </button>
+                      ) : (
+                        <div className="menu-stepper-big">
+                          <button
+                            type="button"
+                            className="menu-step-btn minus"
+                            onClick={() => updateWishlistQty(prod.id, -1)}
+                            aria-label="Restar uno"
+                            title="Quitar uno"
+                          >
+                            <Minus size={18} />
+                          </button>
+                          <span className="menu-step-count">{qty}</span>
+                          <button
+                            type="button"
+                            className="menu-step-btn plus"
+                            onClick={() => updateWishlistQty(prod.id, 1)}
+                            disabled={prod.track_stock && qty >= prod.stock}
+                            aria-label="Sumar uno"
+                            title="Agregar otro"
+                          >
+                            <Plus size={18} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </article>
                 )
@@ -372,47 +412,51 @@ export default function MenuPublico() {
           </section>
         ))}
 
-        {/* Sección de Asistencia al Cliente */}
+        {/* Sección de Asistencia al Cliente con Botón Gigante */}
         <section className="menu-help-card">
           <div className="menu-help-left">
             <div className="menu-help-icon">
-              <Bell size={24} />
+              <Bell size={26} />
             </div>
             <div>
-              <div className="bold">¿Listo para ordenar?</div>
-              <div className="xs muted">
+              <div className="bold" style={{ fontSize: 16 }}>¿Listo para ordenar tus bebidas?</div>
+              <div className="xs muted mt-xs">
                 {tableQuery
                   ? `Indica tus tragos al mesero cuando pase por tu mesa (${tableInfo?.name || 'Mesa #' + tableQuery}).`
                   : 'Acércate a la barra o solicita atención al personal del bar.'}
               </div>
             </div>
           </div>
-          <button className="btn btn-primary menu-call-waiter-btn" onClick={handleCallWaiter}>
-            <Bell size={16} /> Llamar Mesero
+          <button className="btn btn-primary btn-lg menu-call-waiter-btn" onClick={handleCallWaiter}>
+            <Bell size={18} /> {waiterCalled ? '¡Mesero Avisado!' : 'Llamar al Mesero'}
           </button>
         </section>
       </main>
 
-      {/* Botón flotante de selección (Mi Lista) */}
+      {/* Botón flotante grande de selección (Mi Lista) */}
       {wishlistCount > 0 && (
         <aside className="menu-float-bar">
-          <div className="menu-float-info">
+          <div
+            className="menu-float-info"
+            onClick={() => setShowWishlist(true)}
+            style={{ cursor: 'pointer' }}
+          >
             <span className="menu-float-count">{wishlistCount}</span>
             <div>
-              <div className="xs muted">Mi lista de tragos:</div>
-              <div className="money bold">{money(wishlistTotal)}</div>
+              <div className="xs muted">Mi Selección:</div>
+              <div className="money bold" style={{ fontSize: 18 }}>{money(wishlistTotal)}</div>
             </div>
           </div>
           <button
             className="btn btn-primary menu-float-action"
             onClick={() => setShowWishlist(true)}
           >
-            Ver mi pedido ({wishlistCount}) <ChevronRight size={16} />
+            <ShoppingBag size={18} /> Ver mi pedido ({wishlistCount}) <ChevronRight size={16} />
           </button>
         </aside>
       )}
 
-      {/* Modal de Lista de Deseos / Tragos Seleccionados */}
+      {/* Modal de Lista de Deseos con Botones Grandes */}
       {showWishlist && (
         <div className="overlay" onClick={() => setShowWishlist(false)}>
           <div
@@ -421,13 +465,13 @@ export default function MenuPublico() {
           >
             <div className="modal-head">
               <h3>Mi Selección para Ordenar</h3>
-              <button className="icon-btn sm" onClick={() => setShowWishlist(false)}>
+              <button className="icon-btn sm" onClick={() => setShowWishlist(false)} aria-label="Cerrar">
                 <X size={16} />
               </button>
             </div>
             <div className="modal-body">
               <p className="small muted mb">
-                Muestra esta lista a tu mesero cuando tome tu pedido en {tableInfo?.name || 'tu mesa'}:
+                Muestra esta lista a tu mesero cuando tome tu pedido en <strong>{tableInfo?.name || (tableQuery ? `Mesa #${tableQuery}` : 'tu mesa')}</strong>:
               </p>
 
               <div className="menu-wishlist-items col gap-sm">
@@ -438,12 +482,25 @@ export default function MenuPublico() {
                       <div className="bold small">{item.name}</div>
                       <div className="xs muted">{money(item.price)} c/u</div>
                     </div>
-                    <div className="qty">
-                      <button onClick={() => updateWishlistQty(item.id, -1)}>-</button>
-                      <span className="qty-val">{item.qty}</span>
-                      <button onClick={() => updateWishlistQty(item.id, 1)}>+</button>
+                    <div className="menu-stepper-big sm">
+                      <button
+                        className="menu-step-btn minus"
+                        onClick={() => updateWishlistQty(item.id, -1)}
+                        aria-label="Restar uno"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      <span className="menu-step-count">{item.qty}</span>
+                      <button
+                        className="menu-step-btn plus"
+                        onClick={() => updateWishlistQty(item.id, 1)}
+                        disabled={item.track_stock && item.qty >= item.stock}
+                        aria-label="Sumar uno"
+                      >
+                        <Plus size={16} />
+                      </button>
                     </div>
-                    <div className="money bold small right" style={{ width: 75 }}>
+                    <div className="money bold small right" style={{ width: 80 }}>
                       {money(item.price * item.qty)}
                     </div>
                   </div>
@@ -453,24 +510,85 @@ export default function MenuPublico() {
               <div className="card mt menu-wishlist-summary">
                 <div className="row-between">
                   <span className="bold">Total estimado:</span>
-                  <span className="money grad-text bold" style={{ fontSize: 20 }}>
+                  <span className="money grad-text bold" style={{ fontSize: 24 }}>
                     {money(wishlistTotal)}
                   </span>
                 </div>
               </div>
+
+              {/* Botones Grandes de Acción */}
+              <div className="col gap-md mt">
+                <button
+                  className="btn btn-primary btn-lg btn-block"
+                  onClick={() => {
+                    setShowWishlist(false)
+                    handleCallWaiter()
+                  }}
+                >
+                  <Bell size={20} /> ¡Llamar al Mesero para Pedir!
+                </button>
+                <button
+                  className="btn btn-lg btn-block"
+                  onClick={() => {
+                    setShowWishlist(false)
+                    setShowBillboard(true)
+                  }}
+                  title="Modo pantalla grande para mostrar al mesero sin gritar en el bar"
+                >
+                  <Smartphone size={18} /> Mostrar pantalla al Mesero
+                </button>
+              </div>
             </div>
             <div className="modal-foot">
-              <button className="btn" onClick={() => setShowWishlist(false)}>
-                Seguir explorando
+              <button className="btn btn-block" onClick={() => setShowWishlist(false)}>
+                Seguir viendo la carta
               </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => {
-                  setShowWishlist(false)
-                  handleCallWaiter()
-                }}
-              >
-                <Bell size={16} /> ¡Llamar al Mesero!
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pantalla Gigante para Mostrar al Mesero sin esfuerzo en el bar ruidoso */}
+      {showBillboard && (
+        <div className="overlay" onClick={() => setShowBillboard(false)}>
+          <div className="modal menu-billboard-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div className="row" style={{ gap: 8 }}>
+                <Smartphone size={20} className="tone-primary" />
+                <h3 style={{ fontSize: 18 }}>Mostrar al Mesero</h3>
+              </div>
+              <button className="icon-btn sm" onClick={() => setShowBillboard(false)} aria-label="Cerrar">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="modal-body center" style={{ padding: '24px 20px' }}>
+              <div className="menu-billboard-badge">
+                📍 {tableInfo ? tableInfo.name : tableQuery ? `MESA #${tableQuery}` : 'MI PEDIDO'}
+              </div>
+              <p className="small muted mt" style={{ marginBottom: 18 }}>
+                Gira tu pantalla para que el mesero lea tu pedido directamente:
+              </p>
+
+              <div className="menu-billboard-list col gap-md">
+                {wishlistItems.map((item) => (
+                  <div key={item.id} className="menu-billboard-item">
+                    <span className="menu-billboard-qty">{item.qty}x</span>
+                    <span className="menu-billboard-name">{item.name}</span>
+                    <span className="menu-billboard-sub money">{money(item.price * item.qty)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="menu-billboard-total mt">
+                <span className="small muted">Total:</span>
+                <span className="money grad-text bold" style={{ fontSize: 32, display: 'block', marginTop: 4 }}>
+                  {money(wishlistTotal)}
+                </span>
+              </div>
+            </div>
+            <div className="modal-foot">
+              <button className="btn btn-primary btn-block btn-lg" onClick={() => setShowBillboard(false)}>
+                <Check size={18} /> Listo, volver
               </button>
             </div>
           </div>

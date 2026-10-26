@@ -10,6 +10,7 @@ import { useRealtime } from '../hooks/useRealtime'
 import { ROLE_LABEL, initials } from '../lib/format'
 import QrMenuModal from './QrMenuModal'
 import DailyReportModal from './DailyReportModal'
+import ThemeToggle from './ThemeToggle'
 
 const ITEMS = {
   dashboard: { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -118,6 +119,7 @@ export default function Layout() {
               <div className="bold truncate small">{profile.full_name || profile.username}</div>
               <div className="xs muted">@{profile.username}</div>
             </div>
+            <ThemeToggle size="sm" title="Cambiar tema (Marfil / Oscuro)" />
             <button className="icon-btn sm" onClick={signOut} title="Cerrar sesión" id="logout-desktop">
               <LogOut size={15} />
             </button>
@@ -134,6 +136,7 @@ export default function Layout() {
             </div>
           </div>
           <div className="row" style={{ gap: 10 }}>
+            <ThemeToggle size="sm" showLabel />
             <button
               className="btn btn-sm"
               onClick={() => setShowQrModal(true)}
@@ -167,6 +170,7 @@ export default function Layout() {
             </div>
           </div>
           <div className="row" style={{ gap: 6 }}>
+            <ThemeToggle size="sm" />
             <button
               className="icon-btn"
               onClick={() => setShowQrModal(true)}

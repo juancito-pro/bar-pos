@@ -14,6 +14,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
     <title>BarPOS · Sistema de gestión para bar</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('barpos_theme');
+          if (t === 'ivory') {
+            document.documentElement.setAttribute('data-theme', 'ivory');
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute('content', '#f7f4ed');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

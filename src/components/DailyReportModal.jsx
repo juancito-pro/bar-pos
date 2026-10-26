@@ -26,25 +26,32 @@ export default function DailyReportModal({ onClose, targetDate = isoDay() }) {
         setLoading(true)
 
         // 1. Obtener perfiles de usuarios para sugerir correos/gmails
+        //    ('*' para que funcione aunque aún no se haya ejecutado la migración de Gmail)
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('id, username, full_name, role')
+          .select('*')
           .eq('active', true)
           .order('role')
 
-        const suggestedEmails = (profiles || []).map((p) => {
-          const email = toEmail(p.username)
-          return {
+        const suggestedEmails = (profiles || [])
+          .map((p) => ({
             username: p.username,
             name: p.full_name || p.username,
             role: p.role,
-            email,
-          }
-        })
+            email: p.email || toEmail(p.username),
+            hasGmail: Boolean(p.email),
+          }))
+          // Primero los que tienen Gmail real registrado
+          .sort((a, b) => Number(b.hasGmail) - Number(a.hasGmail))
         setUserEmails(suggestedEmails)
 
-        // Correo predeterminado: el del usuario actual o el primer admin
-        const adminUser = suggestedEmails.find((u) => u.role === 'admin') || suggestedEmails[0]
+        // Correo predeterminado: el Gmail del usuario actual, o el primer admin con Gmail
+        const me = suggestedEmails.find((u) => u.username === profile?.username && u.hasGmail)
+        const adminUser =
+          me ||
+          suggestedEmails.find((u) => u.role === 'admin' && u.hasGmail) ||
+          suggestedEmails.find((u) => u.role === 'admin') ||
+          suggestedEmails[0]
         if (adminUser) {
           setRecipientEmail(adminUser.email)
         }
@@ -142,7 +149,7 @@ export default function DailyReportModal({ onClose, targetDate = isoDay() }) {
     }
 
     loadData()
-  }, [targetDate])
+  }, [targetDate, profile?.username])
 
   // Formato de texto para el cuerpo del correo
   const generateEmailBody = useCallback(() => {
