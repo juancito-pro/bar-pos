@@ -56,7 +56,7 @@ export default function Usuarios() {
       if (!authData.user) throw new Error('No se pudo crear el usuario')
 
       // Darle el rol deseado, guardar su Gmail y activarlo
-      const { error: profileError } = await supabase
+      let { error: profileError } = await supabase
         .from('profiles')
         .update({
           full_name: newUser.full_name.trim(),
@@ -66,9 +66,30 @@ export default function Usuarios() {
         })
         .eq('id', authData.user.id)
 
+      // Si la columna email aún no se agregó en la BD, guarda el usuario de todos modos
+      let missingEmailCol = false
+      if (profileError && profileError.message?.toLowerCase().includes('email')) {
+        const { error: retryError } = await supabase
+          .from('profiles')
+          .update({
+            full_name: newUser.full_name.trim(),
+            role: newUser.role,
+            active: true,
+          })
+          .eq('id', authData.user.id)
+        if (!retryError) {
+          profileError = null
+          missingEmailCol = true
+        }
+      }
+
       if (profileError) throw profileError
 
-      toast(`Usuario @${newUser.username} creado exitosamente`)
+      if (missingEmailCol) {
+        toast(`Usuario @${newUser.username} creado. Para habilitar Gmail ejecuta el script SQL en Supabase.`, 'warning')
+      } else {
+        toast(`Usuario @${newUser.username} creado exitosamente`)
+      }
       setShowCreate(false)
       setNewUser(EMPTY_USER)
       load()
@@ -82,19 +103,37 @@ export default function Usuarios() {
   const handleEdit = async (e) => {
     e.preventDefault()
     setBusy(true)
-    const { error } = await supabase
+    let { error } = await supabase
       .from('profiles')
       .update({
         full_name: editUser.full_name.trim(),
         email: cleanEmail(editUser.email) || null,
       })
       .eq('id', editUser.id)
+
+    if (error && error.message?.toLowerCase().includes('email')) {
+      const { error: retryError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editUser.full_name.trim(),
+        })
+        .eq('id', editUser.id)
+      if (!retryError) {
+        setBusy(false)
+        toast('Nombre actualizado. Para guardar el Gmail, ejecuta el script SQL en Supabase.', 'warning')
+        setEditUser(null)
+        load()
+        return
+      }
+    }
+
     setBusy(false)
     if (error) return toast(errMsg(error), 'error')
     toast(`Datos de @${editUser.username} actualizados`)
     setEditUser(null)
     load()
   }
+
 
   const updateRole = async (user, newRole) => {
     if (user.id === myProfile.id && newRole !== 'admin') {
