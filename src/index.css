@@ -1810,3 +1810,88 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+
+/* ---------- Llamados de Mesero en Vivo (Notificaciones QR) ---------- */
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0); }
+  15%, 45% { transform: rotate(-18deg); }
+  30%, 60% { transform: rotate(18deg); }
+  75% { transform: rotate(-6deg); }
+  85% { transform: rotate(6deg); }
+}
+
+.bell-shake {
+  display: inline-block;
+  animation: bellShake 1.2s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+  transform-origin: top center;
+}
+
+@keyframes callPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(234, 179, 8, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(234, 179, 8, 0);
+  }
+}
+
+.table-card.calling {
+  border-color: #eab308 !important;
+  animation: callPulse 1.8s infinite;
+  background: linear-gradient(135deg, hsla(45, 95%, 50%, 0.12), var(--surface-2)) !important;
+}
+
+.waiter-alert-toast {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  max-width: 420px;
+  width: calc(100vw - 36px);
+  z-index: 9999;
+  background: var(--surface-card);
+  border: 2px solid #eab308;
+  border-radius: 18px;
+  padding: 16px 20px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 25px rgba(234, 179, 8, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: slideDownIn .3s ease-out;
+  backdrop-filter: blur(16px);
+}
+
+@keyframes slideDownIn {
+  from {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.waiter-banner-pill {
+  background: linear-gradient(135deg, #eab308, #ca8a04);
+  color: #111;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 14px rgba(234, 179, 8, 0.35);
+}
+
+.table-calls-dock {
+  background: hsla(45, 95%, 50%, 0.08);
+  border: 1px solid hsla(45, 95%, 50%, 0.3);
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+

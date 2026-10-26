@@ -24,7 +24,9 @@ export default function Mesas() {
   const navigate = useNavigate()
   const [tables, setTables] = useState([])
   const [orders, setOrders] = useState([])
+  const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
+
   const [filter, setFilter] = useState('all')
   const [showAddTable, setShowAddTable] = useState(false)
   const [newTable, setNewTable] = useState({ number: '', name: '', capacity: 4 })
@@ -34,21 +36,34 @@ export default function Mesas() {
   const [, tick] = useState(0)
 
   const load = useCallback(async () => {
-    const [t, o] = await Promise.all([
-      supabase.from('bar_tables').select('*').eq('active', true).order('number'),
-      supabase
-        .from('orders')
-        .select('id, table_id, status, total, created_at, waiter_id, waiter:profiles!waiter_id(full_name, username), order_items(status, quantity)')
-        .in('status', ['abierta', 'por_cobrar'])
-        .eq('type', 'mesa'),
-    ])
-    setTables(t.data || [])
-    setOrders(o.data || [])
-    setLoading(false)
+    try {
+      const [t, o, c] = await Promise.all([
+        supabase.from('bar_tables').select('*').eq('active', true).order('number'),
+        supabase
+          .from('orders')
+          .select('id, table_id, status, total, created_at, waiter_id, waiter:profiles!waiter_id(full_name, username), order_items(status, quantity)')
+          .in('status', ['abierta', 'por_cobrar'])
+          .eq('type', 'mesa'),
+        supabase
+          .from('table_calls')
+          .select('*')
+          .eq('status', 'pendiente')
+          .order('created_at', { ascending: false })
+          .catch(() => ({ data: [] })),
+      ])
+      setTables(t.data || [])
+      setOrders(o.data || [])
+      setCalls(c?.data || [])
+    } catch {
+      // Manejo seguro
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
-  useRealtime(['orders', 'order_items', 'bar_tables'], load)
+  useRealtime(['orders', 'order_items', 'bar_tables', 'table_calls'], load)
+
   useEffect(() => {
     const i = setInterval(() => tick((x) => x + 1), 60000)
     return () => clearInterval(i)
@@ -74,11 +89,25 @@ export default function Mesas() {
 
   const byTable = useMemo(() => Object.fromEntries(orders.map((o) => [o.table_id, o])), [orders])
 
+  const callsByTable = useMemo(() => {
+    const map = {}
+    for (const c of calls) {
+      if (c.table_id) map[c.table_id] = c
+      else if (c.table_number) {
+        const match = tables.find((t) => t.number === c.table_number)
+        if (match) map[match.id] = c
+      }
+    }
+    return map
+  }, [calls, tables])
+
   const enriched = tables.map((t) => {
     const o = byTable[t.id]
     const state = !o ? 'libre' : o.status === 'por_cobrar' ? 'por_cobrar' : 'ocupada'
-    return { ...t, order: o, state }
+    const call = callsByTable[t.id]
+    return { ...t, order: o, state, call }
   })
+
 
   const shown = enriched.filter((t) =>
     filter === 'all' ? true : filter === 'mine' ? t.order?.waiter_id === profile.id : t.state === filter,
@@ -159,13 +188,27 @@ export default function Mesas() {
           {shown.map((t) => {
             const ready = t.order?.order_items?.filter((i) => i.status === 'listo').length || 0
             const qty = t.order?.order_items?.reduce((s, i) => s + i.quantity, 0) || 0
+            const isCalling = Boolean(t.call)
             return (
-              <button key={t.id} id={`mesa-${t.number}`} className={`table-card ${t.state}`} onClick={() => navigate(`/mesas/${t.id}`)}>
-                {ready > 0 && (
+              <button
+                key={t.id}
+                id={`mesa-${t.number}`}
+                className={`table-card ${t.state} ${isCalling ? 'calling' : ''}`}
+                onClick={() => navigate(`/mesas/${t.id}`)}
+              >
+                {isCalling ? (
+                  <span
+                    className="badge listo t-ready"
+                    style={{ background: '#eab308', color: '#111', fontWeight: 800 }}
+                  >
+                    <Bell size={12} className="bell-shake" /> ¡Llamando! {t.call.items?.length > 0 ? `(${t.call.items.length})` : ''}
+                  </span>
+                ) : ready > 0 ? (
                   <span className="badge listo t-ready"><Bell size={12} /> {ready} listo{ready > 1 ? 's' : ''}</span>
-                )}
+                ) : null}
                 <span className="t-state">{t.state === 'libre' ? 'Libre' : t.state === 'por_cobrar' ? 'Pidió cuenta' : 'Ocupada'}</span>
                 <span className="t-num">{t.number}</span>
+
                 {t.order ? (
                   <>
                     <span className="xs muted row" style={{ gap: 5 }}>

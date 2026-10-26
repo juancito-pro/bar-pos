@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Send, Receipt, Trash2, CheckCheck, RotateCcw, Ban, Wallet, Clock } from 'lucide-react'
+import { ArrowLeft, Plus, Send, Receipt, Trash2, CheckCheck, RotateCcw, Ban, Wallet, Clock, Bell, Check } from 'lucide-react'
 import { supabase, errMsg } from '../../lib/supabase'
 import { money, timeAgo, fmtTime, STATUS_LABEL } from '../../lib/format'
 import { useRealtime } from '../../hooks/useRealtime'
+import { markCallAttended } from '../../lib/waiterCalls'
+
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../components/Toast'
 import { Loader, Empty, StatusBadge } from '../../components/ui'
@@ -19,10 +21,12 @@ export default function MesaPedido() {
   const [table, setTable] = useState(null)
   const [order, setOrder] = useState(null)
   const [items, setItems] = useState([])
+  const [pendingCall, setPendingCall] = useState(null)
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
   const [paying, setPaying] = useState(false)
+
   const canCharge = ['admin', 'cajero'].includes(profile.role)
 
   const load = useCallback(async () => {
@@ -35,17 +39,34 @@ export default function MesaPedido() {
         .in('status', ['abierta', 'por_cobrar'])
         .maybeSingle(),
     ])
-    setTable(t.data)
-    setOrder(o.data)
-    if (o.data) {
-      const { data } = await supabase.from('order_items').select('*').eq('order_id', o.data.id).order('created_at')
-      setItems(data || [])
-    } else setItems([])
-    setLoading(false)
-  }, [tableId])
+      setTable(t.data)
+      setOrder(o.data)
+      if (o.data) {
+        const { data } = await supabase.from('order_items').select('*').eq('order_id', o.data.id).order('created_at')
+        setItems(data || [])
+      } else setItems([])
 
-  useEffect(() => { load() }, [load])
-  useRealtime(['orders', 'order_items'], load)
+      // Cargar si la mesa tiene un llamado o pedido pendiente desde el QR
+      try {
+        const { data: callData } = await supabase
+          .from('table_calls')
+          .select('*')
+          .eq('status', 'pendiente')
+          .or(`table_id.eq.${tableId},table_number.eq.${t.data?.number || 0}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        setPendingCall(callData || null)
+      } catch {
+        setPendingCall(null)
+      }
+
+      setLoading(false)
+    }, [tableId])
+
+    useEffect(() => { load() }, [load])
+    useRealtime(['orders', 'order_items', 'table_calls'], load)
+
 
   const sendItems = async (cart) => {
     setBusy(true)
@@ -146,6 +167,88 @@ export default function MesaPedido() {
         </div>
         {order ? <StatusBadge status={order.status} label={STATUS_LABEL[order.status]} /> : <span className="badge listo"><span className="dot" />Libre</span>}
       </div>
+
+      {/* Alerta de Pedido o Llamado enviado desde el QR */}
+      {pendingCall && (
+        <div
+          className="card mb"
+          style={{
+            background: 'linear-gradient(135deg, hsla(45, 95%, 50%, 0.12), var(--surface-2))',
+            border: '2px solid #eab308',
+            borderRadius: 16,
+            padding: 16,
+          }}
+        >
+          <div className="row-between">
+            <div className="row" style={{ gap: 8 }}>
+              <span className="waiter-banner-pill">
+                <Bell size={15} className="bell-shake" />
+                {pendingCall.items?.length > 0 ? 'Pedido enviado desde el Menú QR' : 'Cliente llamando al mesero'}
+              </span>
+              <span className="xs muted">{timeAgo(pendingCall.created_at)}</span>
+            </div>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={async () => {
+                await markCallAttended(pendingCall.id, profile?.id)
+                setPendingCall(null)
+                toast('Llamado marcado como atendido')
+              }}
+              title="Marcar atendido"
+            >
+              <Check size={14} /> Atendido
+            </button>
+          </div>
+
+          {pendingCall.items && pendingCall.items.length > 0 && (
+            <div className="col gap-xs mt">
+              <div className="xs bold tone-primary">Tragos seleccionados por el cliente ({pendingCall.items.length}):</div>
+              <div style={{ background: 'var(--surface-3)', borderRadius: 10, padding: '8px 12px' }}>
+                {pendingCall.items.map((it, idx) => (
+                  <div key={idx} className="row-between small" style={{ padding: '3px 0' }}>
+                    <span className="bold">• {it.qty}x {it.name}</span>
+                    <span className="money tone-primary">{money(it.price * it.qty)}</span>
+                  </div>
+                ))}
+                <div className="row-between bold mt-xs" style={{ borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+                  <span>Total estimado:</span>
+                  <span className="money grad-text">{money(pendingCall.total)}</span>
+                </div>
+              </div>
+
+              <div className="row wrap mt-xs" style={{ gap: 8 }}>
+                <button
+                  className="btn btn-primary btn-sm grow"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true)
+                    try {
+                      const cart = pendingCall.items.map((it) => ({
+                        product: { id: it.id, name: it.name, price: it.price },
+                        qty: it.qty,
+                        notes: 'Pedido desde QR del cliente',
+                      }))
+                      const ok = await sendItems(cart)
+                      if (ok) {
+                        await markCallAttended(pendingCall.id, profile?.id)
+                        setPendingCall(null)
+                        toast('¡Tragos del QR cargados a la comanda con éxito! 🍻')
+                      }
+                    } catch (err) {
+                      toast(errMsg(err), 'error')
+                    } finally {
+                      setBusy(false)
+                    }
+                  }}
+                >
+                  <Plus size={15} /> Cargar automáticamente a la comanda
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
 
       {ready.length > 0 && (
         <div className="card mb" style={{ borderColor: 'hsla(152,62%,52%,.4)', background: 'var(--success-soft)' }}>

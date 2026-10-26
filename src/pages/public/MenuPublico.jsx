@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { money } from '../../lib/format'
+import { sendWaiterCall } from '../../lib/waiterCalls'
 import ThemeToggle from '../../components/ThemeToggle'
 
 export default function MenuPublico() {
@@ -26,6 +27,9 @@ export default function MenuPublico() {
   const [showWishlist, setShowWishlist] = useState(false)
   const [showBillboard, setShowBillboard] = useState(false)
   const [waiterCalled, setWaiterCalled] = useState(false)
+  const [callingWaiter, setCallingWaiter] = useState(false)
+  const [callSuccessMsg, setCallSuccessMsg] = useState('')
+
 
   // Cargar catálogo de tragos y mesa
   useEffect(() => {
@@ -155,13 +159,56 @@ export default function MenuPublico() {
   const wishlistTotal = wishlistItems.reduce((acc, item) => acc + item.price * item.qty, 0)
   const wishlistCount = wishlistItems.reduce((acc, item) => acc + item.qty, 0)
 
-  const handleCallWaiter = () => {
+  const handleCallWaiter = async () => {
+    if (callingWaiter) return
+    setCallingWaiter(true)
+
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([120, 60, 120])
     }
-    setWaiterCalled(true)
-    setTimeout(() => setWaiterCalled(false), 5000)
+
+    const tNumber = tableQuery ? Number(tableQuery) || 0 : (tableInfo?.number || 0)
+    const itemsFormatted = wishlistItems.map((it) => ({
+      id: it.id,
+      name: it.name,
+      price: it.price,
+      qty: it.qty,
+      category: it.categories?.name || 'Trago',
+    }))
+
+    const hasItems = itemsFormatted.length > 0
+
+    try {
+      await sendWaiterCall({
+        tableId: tableInfo?.id || null,
+        tableNumber: tNumber,
+        type: hasItems ? 'pedido' : 'llamado',
+        items: itemsFormatted,
+        total: wishlistTotal,
+        notes: hasItems
+          ? `Selección de ${itemsFormatted.length} bebida(s) desde el Menú QR`
+          : 'Solicitud de mesero desde el Menú QR',
+      })
+
+      setWaiterCalled(true)
+      const successText = hasItems
+        ? `🔔 ¡Mesero notificado con tu selección de ${wishlistCount} bebida(s)! En breve se acerca a tu mesa.`
+        : (tNumber ? `🔔 ¡Mesero avisado para la Mesa #${tNumber}!` : '🔔 ¡Mesero avisado! En breve se acerca a atenderte.')
+      setCallSuccessMsg(successText)
+
+      setTimeout(() => {
+        setWaiterCalled(false)
+        setCallSuccessMsg('')
+      }, 7000)
+    } catch (err) {
+      console.error('Error al llamar mesero:', err)
+      setWaiterCalled(true)
+      setTimeout(() => setWaiterCalled(false), 5000)
+    } finally {
+      setCallingWaiter(false)
+    }
   }
+
 
   const handleShare = () => {
     if (navigator.share) {
@@ -215,13 +262,38 @@ export default function MenuPublico() {
           <button
             className={`btn btn-sm ${waiterCalled ? 'btn-success' : 'btn-primary'} menu-quick-waiter-btn`}
             onClick={handleCallWaiter}
+            disabled={callingWaiter}
             title="Avisar al mesero para que se acerque a tu mesa"
           >
-            <Bell size={15} />
-            <span>{waiterCalled ? '¡Mesero Notificado!' : 'Llamar Mesero'}</span>
+            <Bell size={15} className={waiterCalled ? '' : 'bell-shake'} />
+            <span>{callingWaiter ? 'Enviando...' : waiterCalled ? '¡Mesero Notificado!' : 'Llamar Mesero'}</span>
           </button>
         </div>
+
+        {/* Notificación flotante de confirmación para el cliente */}
+        {callSuccessMsg && (
+          <div
+            style={{
+              background: 'linear-gradient(135deg, hsla(45, 95%, 50%, 0.95), hsla(36, 95%, 45%, 0.95))',
+              color: '#111',
+              padding: '10px 16px',
+              fontSize: '13px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              textAlign: 'center',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+              animation: 'slideDownIn .3s ease-out',
+            }}
+          >
+            <Bell size={16} className="bell-shake" />
+            <span>{callSuccessMsg}</span>
+          </div>
+        )}
       </header>
+
 
       <main className="menu-main-content">
         {/* Hero de bienvenida con guía intuitiva rápida */}

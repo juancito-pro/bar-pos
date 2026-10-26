@@ -11,6 +11,7 @@ import { ROLE_LABEL, initials } from '../lib/format'
 import QrMenuModal from './QrMenuModal'
 import DailyReportModal from './DailyReportModal'
 import ThemeToggle from './ThemeToggle'
+import WaiterAlertBanner from './WaiterAlertBanner'
 
 const ITEMS = {
   dashboard: { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -22,9 +23,10 @@ const ITEMS = {
   cuentas: { to: '/cuentas', label: 'Cuentas', icon: Receipt, count: 'porCobrar' },
   barra: { to: '/barra', label: 'Venta barra', icon: Beer },
   comandas: { to: '/comandas', label: 'Comandas', icon: ChefHat, count: 'pendientes' },
-  mesas: { to: '/mesas', label: 'Mesas', icon: LayoutGrid },
+  mesas: { to: '/mesas', label: 'Mesas', icon: LayoutGrid, count: 'llamadas' },
   misPedidos: { to: '/mis-pedidos', label: 'Mis pedidos', icon: ClipboardList, count: 'listos' },
 }
+
 
 const NAV = {
   admin: [
@@ -41,6 +43,15 @@ function useNavCounts(profile) {
 
   const load = useCallback(async () => {
     if (!profile) return
+    let llamadas = 0
+    try {
+      const { count: callCount } = await supabase
+        .from('table_calls')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pendiente')
+      llamadas = callCount || 0
+    } catch {}
+
     if (profile.role === 'mesero') {
       const { count } = await supabase
         .from('order_items')
@@ -51,7 +62,7 @@ function useNavCounts(profile) {
       const listos = count || 0
       if (listos > prevListos.current && navigator.vibrate) navigator.vibrate([120, 60, 120])
       prevListos.current = listos
-      setCounts({ listos })
+      setCounts({ listos, llamadas: llamadas || undefined })
     } else {
       const [a, b] = await Promise.all([
         supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'por_cobrar'),
@@ -61,12 +72,13 @@ function useNavCounts(profile) {
           .eq('status', 'pendiente')
           .in('orders.status', ['abierta', 'por_cobrar']),
       ])
-      setCounts({ porCobrar: a.count || 0, pendientes: b.count || 0 })
+      setCounts({ porCobrar: a.count || 0, pendientes: b.count || 0, llamadas: llamadas || undefined })
     }
   }, [profile])
 
   useEffect(() => { load() }, [load])
-  useRealtime(['orders', 'order_items'], load, 400)
+  useRealtime(['orders', 'order_items', 'table_calls'], load, 400)
+
   return counts
 }
 
@@ -196,6 +208,7 @@ export default function Layout() {
         </header>
 
         <main className="content" key={pathname}>
+          <WaiterAlertBanner />
           <Outlet />
         </main>
       </div>

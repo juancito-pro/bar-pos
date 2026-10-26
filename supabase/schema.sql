@@ -109,14 +109,30 @@ create table if not exists public.stock_movements (
   user_id     uuid references public.profiles(id) default auth.uid(),
   created_at  timestamptz not null default now()
 );
+create table if not exists public.table_calls (
+  id           bigint generated always as identity primary key,
+  table_id     bigint references public.bar_tables(id) on delete set null,
+  table_number int not null default 0,
+  type         text not null default 'llamado' check (type in ('llamado', 'pedido', 'cuenta')),
+  items        jsonb not null default '[]'::jsonb,
+  total        numeric(10,2) not null default 0,
+  notes        text default '',
+  status       text not null default 'pendiente' check (status in ('pendiente', 'atendido', 'cancelado')),
+  created_at   timestamptz not null default now(),
+  attended_at  timestamptz,
+  attended_by  uuid references public.profiles(id)
+);
 
 create index if not exists idx_orders_status     on public.orders(status);
 create index if not exists idx_orders_paid_at    on public.orders(paid_at);
 create index if not exists idx_items_order       on public.order_items(order_id);
 create index if not exists idx_payments_session  on public.payments(cash_session_id);
+create index if not exists idx_table_calls_status  on public.table_calls(status);
+create index if not exists idx_table_calls_created on public.table_calls(created_at desc);
 -- Una mesa solo puede tener un pedido abierto a la vez
 create unique index if not exists uq_open_order_per_table on public.orders(table_id)
   where status in ('abierta','por_cobrar') and table_id is not null;
+
 
 -- ---------------------------------------------------------------------
 -- 2. FUNCIONES AUXILIARES
@@ -374,6 +390,17 @@ create policy "cash_open" on public.cash_sessions for insert to authenticated
 drop policy if exists "stock_read" on public.stock_movements;
 create policy "stock_read" on public.stock_movements for select to authenticated using (public.my_role() = 'admin');
 
+-- LLAMADOS DESDE MENÚ QR
+alter table public.table_calls enable row level security;
+drop policy if exists "calls_insert_all" on public.table_calls;
+create policy "calls_insert_all" on public.table_calls for insert to anon, authenticated with check (true);
+drop policy if exists "calls_select_all" on public.table_calls;
+create policy "calls_select_all" on public.table_calls for select to anon, authenticated using (true);
+drop policy if exists "calls_update_staff" on public.table_calls;
+create policy "calls_update_staff" on public.table_calls for update to authenticated
+  using (public.my_role() is not null) with check (public.my_role() is not null);
+
+
 -- ---------------------------------------------------------------------
 -- 4. TIEMPO REAL (las pantallas se actualizan solas)
 -- ---------------------------------------------------------------------
@@ -381,6 +408,7 @@ do $$ begin
   begin alter publication supabase_realtime add table public.orders;      exception when others then null; end;
   begin alter publication supabase_realtime add table public.order_items; exception when others then null; end;
   begin alter publication supabase_realtime add table public.products;    exception when others then null; end;
+  begin alter publication supabase_realtime add table public.table_calls; exception when others then null; end;
 end $$;
 
 -- ---------------------------------------------------------------------
