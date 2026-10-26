@@ -17,6 +17,22 @@ function getAudioContext() {
   return audioCtx
 }
 
+// Desbloquear audio con el primer toque o clic del usuario
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      const ctx = getAudioContext()
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {})
+      }
+    } catch {}
+  }
+  window.addEventListener('click', unlockAudio, { passive: true })
+  window.addEventListener('touchstart', unlockAudio, { passive: true })
+  window.addEventListener('keydown', unlockAudio, { passive: true })
+}
+
+
 /**
  * Toca un timbre de campana de bar / restaurante (doble tono armónico nítido)
  */

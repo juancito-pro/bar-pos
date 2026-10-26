@@ -1,24 +1,32 @@
 import { supabase } from './supabase'
 import { triggerWaiterAlert } from './sound'
 
-const BROADCAST_CHANNEL = 'waiter-live-alerts'
+export const WAITER_CHANNEL_NAME = 'waiter-live-alerts'
 
-// Canal único compartido para broadcast en tiempo real
-let alertChannel = null
+let sharedChannel = null
 
-export function getAlertChannel() {
-  if (!alertChannel) {
-    alertChannel = supabase.channel(BROADCAST_CHANNEL, {
-      config: { broadcast: { self: false } },
+/**
+ * Obtiene o crea el canal de comunicación en tiempo real
+ * Ambos lados (emisor QR y receptor mesero) usan el MISMO canal
+ */
+export function getSharedAlertChannel() {
+  if (!sharedChannel) {
+    sharedChannel = supabase.channel(WAITER_CHANNEL_NAME, {
+      config: {
+        broadcast: {
+          self: true, // Permite recibir el evento en la misma máquina/pestaña al probar
+        },
+      },
     })
-    alertChannel.subscribe()
+    sharedChannel.subscribe((status) => {
+      console.log(`[Canal Mesero] Estado de suscripción: ${status}`)
+    })
   }
-  return alertChannel
+  return sharedChannel
 }
 
 /**
- * Envía un llamado de mesero o pedido preliminar desde el Menú QR
- * Se envía a la tabla de base de datos Y por canal broadcast para redundancia instantánea
+ * Envía un llamado de mesero o pedido desde el Menú QR
  */
 export async function sendWaiterCall({
   tableId = null,
@@ -28,9 +36,10 @@ export async function sendWaiterCall({
   total = 0,
   notes = '',
 }) {
+  const num = Number(tableNumber) || 0
   const payload = {
     table_id: tableId || null,
-    table_number: Number(tableNumber) || 0,
+    table_number: num,
     type,
     items,
     total: Number(total) || 0,
@@ -39,38 +48,43 @@ export async function sendWaiterCall({
     created_at: new Date().toISOString(),
   }
 
-  // 1. Emitir vía Broadcast en tiempo real (llega en milisegundos a todos los meseros conectados)
-  try {
-    const ch = getAlertChannel()
-    ch.send({
-      type: 'broadcast',
-      event: 'waiter_call',
-      payload: { ...payload, tempId: `call_${Date.now()}` },
-    }).catch(() => {})
-  } catch (err) {
-    console.warn('Error emitiendo broadcast:', err)
-  }
-
-  // 2. Insertar en la tabla table_calls de Supabase
+  // 1. Insertar en la base de datos Supabase
+  let savedCall = null
   try {
     const { data, error } = await supabase
       .from('table_calls')
       .insert(payload)
-      .select()
+      .select('*, bar_tables(id, number, name)')
       .single()
 
-    if (error) {
-      console.warn('Nota: table_calls aún no está en Supabase o falló:', error.message)
-      // Aunque falle la tabla (si el usuario aún no ejecutó la migración SQL),
-      // el broadcast ya avisó a los meseros conectados.
-      return { ok: true, offlineOnly: true, call: payload }
+    if (!error && data) {
+      savedCall = data
+    } else if (error) {
+      console.warn('Error al insertar table_calls:', error.message)
     }
-
-    return { ok: true, call: data }
   } catch (err) {
-    console.warn('Excepción al registrar llamado:', err)
-    return { ok: true, offlineOnly: true, call: payload }
+    console.warn('Excepción al insertar en BD:', err)
   }
+
+  // Objeto final que se emitirá
+  const finalCall = savedCall || {
+    ...payload,
+    id: `temp_${Date.now()}`,
+  }
+
+  // 2. Emitir vía Broadcast en tiempo real (mismo canal para todos)
+  try {
+    const ch = getSharedAlertChannel()
+    await ch.send({
+      type: 'broadcast',
+      event: 'waiter_call',
+      payload: finalCall,
+    })
+  } catch (err) {
+    console.warn('Error emitiendo broadcast:', err)
+  }
+
+  return { ok: true, call: finalCall }
 }
 
 /**
@@ -78,15 +92,15 @@ export async function sendWaiterCall({
  */
 export async function markCallAttended(callId, profileId = null) {
   try {
-    // 1. Notificar por broadcast para cerrar la alerta en todos los meseros
-    const ch = getAlertChannel()
+    // 1. Notificar por broadcast a todos los meseros
+    const ch = getSharedAlertChannel()
     ch.send({
       type: 'broadcast',
       event: 'call_attended',
       payload: { id: callId },
     }).catch(() => {})
 
-    // 2. Actualizar en base de datos
+    // 2. Actualizar en la base de datos
     if (callId && typeof callId === 'number') {
       await supabase
         .from('table_calls')
@@ -105,45 +119,57 @@ export async function markCallAttended(callId, profileId = null) {
 }
 
 /**
- * Escucha llamados de mesero entrantes (por broadcast y por postgres_changes)
+ * Suscripción ultra-robusta a llamados de mesero:
+ * 1. Broadcast en tiempo real (canal común 'waiter-live-alerts')
+ * 2. Eventos postgres_changes en la tabla 'table_calls'
+ * 3. Polling de respaldo cada 5 segundos para máxima confiabilidad
  */
 export function subscribeToWaiterCalls(onNewCall, onCallAttended) {
   const seenIds = new Set()
 
-  const handleIncoming = (call) => {
-    const identifier = call.id || call.tempId || `${call.table_number}-${call.created_at}`
-    if (seenIds.has(identifier)) return
-    seenIds.add(identifier)
+  const handleIncoming = (call, playAlert = true) => {
+    if (!call) return
+    const idKey = String(call.id || `${call.table_number}_${call.created_at}`)
+    if (seenIds.has(idKey)) return
+    seenIds.add(idKey)
 
-    // Disparar sonido de campana y vibración
-    triggerWaiterAlert()
+    if (playAlert) {
+      triggerWaiterAlert()
+    }
 
     if (onNewCall) onNewCall(call)
   }
 
-  const ch = supabase.channel(`waiter-listener-${Math.random().toString(36).slice(2)}`)
+  const ch = getSharedAlertChannel()
 
-  // Escuchar por broadcast instantáneo
+  // Escuchar Broadcast directo
   ch.on('broadcast', { event: 'waiter_call' }, (evt) => {
-    if (evt.payload) handleIncoming(evt.payload)
+    if (evt.payload) {
+      console.log('[Canal Mesero] Broadcast recibido:', evt.payload)
+      handleIncoming(evt.payload, true)
+    }
   })
 
-  // Escuchar cuando otro mesero atienda
+  // Escuchar cuando se atiende
   ch.on('broadcast', { event: 'call_attended' }, (evt) => {
-    if (onCallAttended && evt.payload?.id) onCallAttended(evt.payload.id)
+    if (onCallAttended && evt.payload?.id) {
+      onCallAttended(evt.payload.id)
+    }
   })
 
-  // Escuchar cambios directos en la tabla table_calls
+  // Escuchar INSERT en Postgres
   ch.on(
     'postgres_changes',
     { event: 'INSERT', schema: 'public', table: 'table_calls' },
     (payload) => {
       if (payload.new && payload.new.status === 'pendiente') {
-        handleIncoming(payload.new)
+        console.log('[Canal Mesero] Postgres INSERT recibido:', payload.new)
+        handleIncoming(payload.new, true)
       }
     },
   )
 
+  // Escuchar UPDATE en Postgres
   ch.on(
     'postgres_changes',
     { event: 'UPDATE', schema: 'public', table: 'table_calls' },
@@ -154,9 +180,31 @@ export function subscribeToWaiterCalls(onNewCall, onCallAttended) {
     },
   )
 
-  ch.subscribe()
+  // Polling de respaldo cada 5 segundos
+  const interval = setInterval(async () => {
+    try {
+      const { data } = await supabase
+        .from('table_calls')
+        .select('*')
+        .eq('status', 'pendiente')
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      if (data && data.length > 0) {
+        for (const item of data) {
+          const idKey = String(item.id)
+          if (!seenIds.has(idKey)) {
+            console.log('[Canal Mesero] Polling detectó nuevo llamado:', item)
+            handleIncoming(item, true)
+          }
+        }
+      }
+    } catch {
+      // Ignorar errores en sondeo
+    }
+  }, 5000)
 
   return () => {
-    supabase.removeChannel(ch)
+    clearInterval(interval)
   }
 }

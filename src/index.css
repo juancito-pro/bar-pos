@@ -1848,10 +1848,10 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   position: fixed;
   top: 18px;
   right: 18px;
-  max-width: 420px;
+  max-width: 440px;
   width: calc(100vw - 36px);
-  z-index: 9999;
-  background: var(--surface-card);
+  z-index: 99999;
+  background: var(--surface-2);
   border: 2px solid #eab308;
   border-radius: 18px;
   padding: 16px 20px;
@@ -1862,6 +1862,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   animation: slideDownIn .3s ease-out;
   backdrop-filter: blur(16px);
 }
+
 
 @keyframes slideDownIn {
   from {

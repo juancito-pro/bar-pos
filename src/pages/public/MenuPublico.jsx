@@ -27,8 +27,12 @@ export default function MenuPublico() {
   const [showWishlist, setShowWishlist] = useState(false)
   const [showBillboard, setShowBillboard] = useState(false)
   const [waiterCalled, setWaiterCalled] = useState(false)
+  const [availableTables, setAvailableTables] = useState([])
+  const [selectedTableNumber, setSelectedTableNumber] = useState(tableQuery ? Number(tableQuery) : null)
+  const [showTablePickerModal, setShowTablePickerModal] = useState(false)
   const [callingWaiter, setCallingWaiter] = useState(false)
   const [callSuccessMsg, setCallSuccessMsg] = useState('')
+
 
 
   // Cargar catálogo de tragos y mesa
@@ -38,9 +42,10 @@ export default function MenuPublico() {
         setLoading(true)
         setError(null)
 
-        const [catRes, prodRes] = await Promise.all([
+        const [catRes, prodRes, tablesRes] = await Promise.all([
           supabase.from('categories').select('*').order('sort_order'),
           supabase.from('products').select('*, categories(name, icon)').eq('active', true).order('name'),
+          supabase.from('bar_tables').select('id, number, name').eq('active', true).order('number'),
         ])
 
         if (catRes.error) throw catRes.error
@@ -48,19 +53,19 @@ export default function MenuPublico() {
 
         setCategories(catRes.data || [])
         setProducts(prodRes.data || [])
+        const allTables = tablesRes.data || []
+        setAvailableTables(allTables)
 
-        // Si se especificó mesa, buscar datos de la mesa
+        // Si se especificó mesa en la URL, asociar datos
         if (tableQuery) {
           const num = parseInt(tableQuery, 10)
           if (!isNaN(num)) {
-            const { data: tData } = await supabase
-              .from('bar_tables')
-              .select('*')
-              .eq('number', num)
-              .maybeSingle()
-            if (tData) setTableInfo(tData)
+            setSelectedTableNumber(num)
+            const match = allTables.find((t) => t.number === num)
+            if (match) setTableInfo(match)
           }
         }
+
       } catch (err) {
         console.error('Error cargando menú digital:', err)
         setError('No pudimos cargar la carta en este momento. Revisa tu conexión.')
@@ -159,7 +164,22 @@ export default function MenuPublico() {
   const wishlistTotal = wishlistItems.reduce((acc, item) => acc + item.price * item.qty, 0)
   const wishlistCount = wishlistItems.reduce((acc, item) => acc + item.qty, 0)
 
-  const handleCallWaiter = async () => {
+  const handleCallWaiter = async (customTableNum = null) => {
+    const finalTableNum =
+      customTableNum !== null
+        ? customTableNum
+        : selectedTableNumber !== null
+        ? selectedTableNumber
+        : tableQuery
+        ? Number(tableQuery) || 0
+        : tableInfo?.number || 0
+
+    // Si aún no se sabe qué mesa es, mostrar selector amigable
+    if (!finalTableNum && availableTables.length > 0 && customTableNum === null) {
+      setShowTablePickerModal(true)
+      return
+    }
+
     if (callingWaiter) return
     setCallingWaiter(true)
 
@@ -167,7 +187,8 @@ export default function MenuPublico() {
       navigator.vibrate([120, 60, 120])
     }
 
-    const tNumber = tableQuery ? Number(tableQuery) || 0 : (tableInfo?.number || 0)
+    const currentTableObj = availableTables.find((t) => t.number === finalTableNum) || tableInfo
+
     const itemsFormatted = wishlistItems.map((it) => ({
       id: it.id,
       name: it.name,
@@ -180,8 +201,8 @@ export default function MenuPublico() {
 
     try {
       await sendWaiterCall({
-        tableId: tableInfo?.id || null,
-        tableNumber: tNumber,
+        tableId: currentTableObj?.id || null,
+        tableNumber: finalTableNum,
         type: hasItems ? 'pedido' : 'llamado',
         items: itemsFormatted,
         total: wishlistTotal,
@@ -193,7 +214,7 @@ export default function MenuPublico() {
       setWaiterCalled(true)
       const successText = hasItems
         ? `🔔 ¡Mesero notificado con tu selección de ${wishlistCount} bebida(s)! En breve se acerca a tu mesa.`
-        : (tNumber ? `🔔 ¡Mesero avisado para la Mesa #${tNumber}!` : '🔔 ¡Mesero avisado! En breve se acerca a atenderte.')
+        : (finalTableNum ? `🔔 ¡Mesero avisado para la Mesa #${finalTableNum}!` : '🔔 ¡Mesero avisado! En breve se acerca a atenderte.')
       setCallSuccessMsg(successText)
 
       setTimeout(() => {
@@ -208,6 +229,7 @@ export default function MenuPublico() {
       setCallingWaiter(false)
     }
   }
+
 
 
   const handleShare = () => {
@@ -666,6 +688,77 @@ export default function MenuPublico() {
           </div>
         </div>
       )}
+
+      {/* Modal para que el cliente elija su mesa si abrió el menú general sin QR de mesa */}
+
+      {showTablePickerModal && (
+        <div className="overlay" onClick={() => setShowTablePickerModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-head">
+              <div className="row" style={{ gap: 8 }}>
+                <Bell size={20} className="tone-primary bell-shake" />
+                <h3 style={{ fontSize: 18 }}>¿En qué mesa te encuentras?</h3>
+              </div>
+              <button className="icon-btn sm" onClick={() => setShowTablePickerModal(false)} aria-label="Cerrar">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="modal-body col gap-md" style={{ padding: '20px' }}>
+              <p className="small muted" style={{ margin: 0 }}>
+                Selecciona tu mesa para que el mesero sepa a dónde acercarse a atenderte:
+              </p>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 10,
+                  maxHeight: 280,
+                  overflowY: 'auto',
+                  padding: 4,
+                }}
+              >
+                {availableTables.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="btn"
+                    style={{
+                      height: 56,
+                      flexDirection: 'column',
+                      gap: 2,
+                      fontWeight: 800,
+                      fontSize: 15,
+                      borderColor: selectedTableNumber === t.number ? 'var(--primary)' : 'var(--border)',
+                      background: selectedTableNumber === t.number ? 'var(--primary-soft)' : 'var(--surface-2)',
+                    }}
+                    onClick={() => {
+                      setSelectedTableNumber(t.number)
+                      setTableInfo(t)
+                      setShowTablePickerModal(false)
+                      handleCallWaiter(t.number)
+                    }}
+                  >
+                    <span>Mesa #{t.number}</span>
+                    <span className="xs faint">{t.name || 'Salón'}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-block"
+                onClick={() => {
+                  setSelectedTableNumber(0)
+                  setShowTablePickerModal(false)
+                  handleCallWaiter(0)
+                }}
+              >
+                Estoy en la Barra / Salón General
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
   )
 }

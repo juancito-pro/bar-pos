@@ -63,14 +63,28 @@ export default function WaiterAlertBanner() {
     await markCallAttended(callId, profile?.id)
   }
 
-  const handleGoToTable = (call) => {
+  const handleGoToTable = async (call) => {
+    setLatestAlert(null)
     if (call.table_id) {
       navigate(`/mesas/${call.table_id}`)
-    } else {
-      navigate('/mesas')
+      return
     }
-    setLatestAlert(null)
+    if (call.table_number) {
+      try {
+        const { data } = await supabase
+          .from('bar_tables')
+          .select('id')
+          .eq('number', Number(call.table_number))
+          .maybeSingle()
+        if (data?.id) {
+          navigate(`/mesas/${data.id}`)
+          return
+        }
+      } catch {}
+    }
+    navigate('/mesas')
   }
+
 
   return (
     <>

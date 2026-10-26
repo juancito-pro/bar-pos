@@ -207,10 +207,11 @@ export default function Layout() {
           </div>
         </header>
 
+        <WaiterAlertBanner />
         <main className="content" key={pathname}>
-          <WaiterAlertBanner />
           <Outlet />
         </main>
+
       </div>
 
       <nav className="bottom-nav">
