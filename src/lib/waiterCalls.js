@@ -1,32 +1,9 @@
 import { supabase } from './supabase'
 import { triggerWaiterAlert } from './sound'
 
-export const WAITER_CHANNEL_NAME = 'waiter-live-alerts'
-
-let sharedChannel = null
-
-/**
- * Obtiene o crea el canal de comunicación en tiempo real
- * Ambos lados (emisor QR y receptor mesero) usan el MISMO canal
- */
-export function getSharedAlertChannel() {
-  if (!sharedChannel) {
-    sharedChannel = supabase.channel(WAITER_CHANNEL_NAME, {
-      config: {
-        broadcast: {
-          self: true, // Permite recibir el evento en la misma máquina/pestaña al probar
-        },
-      },
-    })
-    sharedChannel.subscribe((status) => {
-      console.log(`[Canal Mesero] Estado de suscripción: ${status}`)
-    })
-  }
-  return sharedChannel
-}
-
 /**
  * Envía un llamado de mesero o pedido desde el Menú QR
+ * Se inserta en la tabla table_calls de Supabase
  */
 export async function sendWaiterCall({
   tableId = null,
@@ -48,8 +25,6 @@ export async function sendWaiterCall({
     created_at: new Date().toISOString(),
   }
 
-  // 1. Insertar en la base de datos Supabase
-  let savedCall = null
   try {
     const { data, error } = await supabase
       .from('table_calls')
@@ -57,34 +32,16 @@ export async function sendWaiterCall({
       .select('*, bar_tables(id, number, name)')
       .single()
 
-    if (!error && data) {
-      savedCall = data
-    } else if (error) {
-      console.warn('Error al insertar table_calls:', error.message)
+    if (error) {
+      console.warn('Error al registrar llamado en table_calls:', error.message)
+      return { ok: false, error }
     }
+
+    return { ok: true, call: data }
   } catch (err) {
-    console.warn('Excepción al insertar en BD:', err)
+    console.error('Excepción al registrar llamado:', err)
+    return { ok: false, error: err }
   }
-
-  // Objeto final que se emitirá
-  const finalCall = savedCall || {
-    ...payload,
-    id: `temp_${Date.now()}`,
-  }
-
-  // 2. Emitir vía Broadcast en tiempo real (mismo canal para todos)
-  try {
-    const ch = getSharedAlertChannel()
-    await ch.send({
-      type: 'broadcast',
-      event: 'waiter_call',
-      payload: finalCall,
-    })
-  } catch (err) {
-    console.warn('Error emitiendo broadcast:', err)
-  }
-
-  return { ok: true, call: finalCall }
 }
 
 /**
@@ -92,16 +49,7 @@ export async function sendWaiterCall({
  */
 export async function markCallAttended(callId, profileId = null) {
   try {
-    // 1. Notificar por broadcast a todos los meseros
-    const ch = getSharedAlertChannel()
-    ch.send({
-      type: 'broadcast',
-      event: 'call_attended',
-      payload: { id: callId },
-    }).catch(() => {})
-
-    // 2. Actualizar en la base de datos
-    if (callId && typeof callId === 'number') {
+    if (callId) {
       await supabase
         .from('table_calls')
         .update({
@@ -119,57 +67,39 @@ export async function markCallAttended(callId, profileId = null) {
 }
 
 /**
- * Suscripción ultra-robusta a llamados de mesero:
- * 1. Broadcast en tiempo real (canal común 'waiter-live-alerts')
- * 2. Eventos postgres_changes en la tabla 'table_calls'
- * 3. Polling de respaldo cada 5 segundos para máxima confiabilidad
+ * Suscripción segura a llamados de mesero en tiempo real:
+ * - Registra TODOS los callbacks ANTES de invocar subscribe() (cumpliendo la regla estricta de Supabase)
+ * - Mantiene un sondeo de respaldo cada 4 segundos para máxima confiabilidad
  */
 export function subscribeToWaiterCalls(onNewCall, onCallAttended) {
   const seenIds = new Set()
 
-  const handleIncoming = (call, playAlert = true) => {
+  const handleIncoming = (call) => {
     if (!call) return
     const idKey = String(call.id || `${call.table_number}_${call.created_at}`)
     if (seenIds.has(idKey)) return
     seenIds.add(idKey)
 
-    if (playAlert) {
-      triggerWaiterAlert()
-    }
+    // Tocar timbre de campana y vibrar
+    triggerWaiterAlert()
 
     if (onNewCall) onNewCall(call)
   }
 
-  const ch = getSharedAlertChannel()
+  // Crear canal con nombre único
+  const ch = supabase.channel(`waiter-events-${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
-  // Escuchar Broadcast directo
-  ch.on('broadcast', { event: 'waiter_call' }, (evt) => {
-    if (evt.payload) {
-      console.log('[Canal Mesero] Broadcast recibido:', evt.payload)
-      handleIncoming(evt.payload, true)
-    }
-  })
-
-  // Escuchar cuando se atiende
-  ch.on('broadcast', { event: 'call_attended' }, (evt) => {
-    if (onCallAttended && evt.payload?.id) {
-      onCallAttended(evt.payload.id)
-    }
-  })
-
-  // Escuchar INSERT en Postgres
+  // 1. REGISTRAR TODOS LOS EVENTOS ANTES DE SUBSCRIBE
   ch.on(
     'postgres_changes',
     { event: 'INSERT', schema: 'public', table: 'table_calls' },
     (payload) => {
       if (payload.new && payload.new.status === 'pendiente') {
-        console.log('[Canal Mesero] Postgres INSERT recibido:', payload.new)
-        handleIncoming(payload.new, true)
+        handleIncoming(payload.new)
       }
     },
   )
 
-  // Escuchar UPDATE en Postgres
   ch.on(
     'postgres_changes',
     { event: 'UPDATE', schema: 'public', table: 'table_calls' },
@@ -180,7 +110,10 @@ export function subscribeToWaiterCalls(onNewCall, onCallAttended) {
     },
   )
 
-  // Polling de respaldo cada 5 segundos
+  // 2. LLAMAR A SUBSCRIBE DESPUÉS DE REGISTRAR LOS CALLBACKS
+  ch.subscribe()
+
+  // 3. Sondeo de respaldo cada 4 segundos
   const interval = setInterval(async () => {
     try {
       const { data } = await supabase
@@ -194,17 +127,18 @@ export function subscribeToWaiterCalls(onNewCall, onCallAttended) {
         for (const item of data) {
           const idKey = String(item.id)
           if (!seenIds.has(idKey)) {
-            console.log('[Canal Mesero] Polling detectó nuevo llamado:', item)
-            handleIncoming(item, true)
+            handleIncoming(item)
           }
         }
       }
     } catch {
-      // Ignorar errores en sondeo
+      // Ignorar errores temporales de conexión
     }
-  }, 5000)
+  }, 4000)
 
+  // 4. Limpieza ordenada al desmontar
   return () => {
     clearInterval(interval)
+    supabase.removeChannel(ch)
   }
 }
