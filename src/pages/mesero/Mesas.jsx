@@ -48,14 +48,13 @@ export default function Mesas() {
           .from('table_calls')
           .select('*')
           .eq('status', 'pendiente')
-          .order('created_at', { ascending: false })
-          .catch(() => ({ data: [] })),
+          .order('created_at', { ascending: false }),
       ])
       setTables(t.data || [])
       setOrders(o.data || [])
-      setCalls(c?.data || [])
-    } catch {
-      // Manejo seguro
+      setCalls(c.data || [])
+    } catch (err) {
+      console.error('Error cargando mesas:', err)
     } finally {
       setLoading(false)
     }
@@ -63,6 +62,7 @@ export default function Mesas() {
 
   useEffect(() => { load() }, [load])
   useRealtime(['orders', 'order_items', 'bar_tables', 'table_calls'], load)
+
 
   useEffect(() => {
     const i = setInterval(() => tick((x) => x + 1), 60000)
